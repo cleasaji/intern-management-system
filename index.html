@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Intern Management System — Inventory Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://unpkg.com/@tabler/icons-webfont@2.47.0/tabler-icons.min.css" />
+<style>
+  :root {
+    --bg: #f4f6f9; --card: #ffffff; --text: #1a1f27; --muted: #6b7280;
+    --accent: #3b82f6; --border: #e5e7eb;
+    --instock: #22c55e; --returned: #f59e0b; --received: #3b82f6;
+    --damaged: #ef4444; --issued: #8b5cf6;
+  }
+  [data-theme="dark"] {
+    --bg: #0f1420; --card: #171d2b; --text: #e8eef3; --muted: #8ea0ad; --border: #2a3243;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); transition: background .2s, color .2s;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; }
+  .brand .logo {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    display: flex; align-items: center; justify-content: center; color: white; font-size: 1rem;
+  }
+  /* NOTE: swap .logo for an <img src="data:image/png;base64,..."> with the real
+     Forbes Marshall logo when deploying -- kept as a generated placeholder here
+     since the actual logo asset wasn't available to embed. */
+  .toggle-btn {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; cursor: pointer; color: var(--text); font-size: 1rem;
+  }
+  main { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; text-align: center;
+  }
+  .stat-card .num { font-size: 1.8rem; font-weight: 700; }
+  .stat-card .label { color: var(--muted); font-size: .8rem; margin-top: 4px; }
+  .stat-card.instock .num { color: var(--instock); }
+  .stat-card.issued .num { color: var(--issued); }
+  .stat-card.returned .num { color: var(--returned); }
+  .stat-card.received .num { color: var(--received); }
+  .stat-card.damaged .num { color: var(--damaged); }
+
+  .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .btn {
+    padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer;
+    font-weight: 600; font-size: .9rem; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: .9rem; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; color: white; }
+  .badge.instock { background: var(--instock); }
+  .badge.issued { background: var(--issued); }
+  .badge.returned { background: var(--returned); }
+  .badge.received { background: var(--received); }
+  .badge.damaged { background: var(--damaged); }
+
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--card); border-radius: 12px; padding: 24px; width: 400px; }
+  .modal input, .modal select {
+    width: 100%; padding: 10px; margin-bottom: 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  #exportForm { display: none; }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px; display: none; box-shadow: 0 4px 20px rgba(0,0,0,.15);
+  }
+</style>
+</head>
+<body data-theme="light">
+
+<header>
+  <div class="brand">
+    <div class="logo"><i class="ti ti-package"></i></div>
+    Intern Management System
+  </div>
+  <button class="toggle-btn" id="themeToggle" title="Toggle dark/light mode">
+    <i class="ti ti-moon"></i>
+  </button>
+</header>
+
+<main>
+  <div class="stats" id="statCards">
+    <div class="stat-card instock"><div class="num" id="countInStock">0</div><div class="label">In Stock</div></div>
+    <div class="stat-card issued"><div class="num" id="countIssued">0</div><div class="label">Issued</div></div>
+    <div class="stat-card returned"><div class="num" id="countReturned">0</div><div class="label">Returned Vendor</div></div>
+    <div class="stat-card received"><div class="num" id="countReceived">0</div><div class="label">Received Vendor</div></div>
+    <div class="stat-card damaged"><div class="num" id="countDamaged">0</div><div class="label">Damaged</div></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" id="addBtn"><i class="ti ti-plus"></i> Add Item</button>
+    <button class="btn btn-secondary" id="syncBtn"><i class="ti ti-refresh"></i> Sync from Sheet</button>
+    <button class="btn btn-secondary" id="exportBtn"><i class="ti ti-file-export"></i> Export to Sheets</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Item</th><th>Assigned To</th><th>Status</th><th>Last Updated</th><th></th></tr>
+    </thead>
+    <tbody id="itemsBody"></tbody>
+  </table>
+</main>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3 id="modalTitle">Add Item</h3>
+    <input type="hidden" id="itemId" />
+    <input type="text" id="itemName" placeholder="Item name (e.g. Dell Laptop #12)" />
+    <input type="text" id="assignedTo" placeholder="Assigned to (intern name, optional)" />
+    <select id="itemStatus">
+      <option value="In Stock">In Stock</option>
+      <option value="Issued">Issued</option>
+      <option value="Returned Vendor">Returned Vendor</option>
+      <option value="Received Vendor">Received Vendor</option>
+      <option value="Damaged">Damaged</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden form used for the Sheets export -- submitting a real HTML form
+     to the Apps Script Web App URL avoids the CORS restrictions that a
+     fetch()-based export hit (Apps Script Web Apps don't reliably send
+     CORS headers for cross-origin fetch, but a plain form POST/GET
+     navigation isn't subject to the same restriction). -->
+<form id="exportForm" method="GET" target="_blank">
+  <input type="hidden" name="action" value="export" />
+</form>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // NOTE: point this at your deployed Apps Script Web App URL
+  // (Deploy -> New deployment -> Web app, in the Apps Script editor for Code.gs)
+  const SCRIPT_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec";
+
+  const STATUS_KEYS = {
+    "In Stock": "instock", "Issued": "issued",
+    "Returned Vendor": "returned", "Received Vendor": "received", "Damaged": "damaged",
+  };
+
+  let items = [];
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.display = "block";
+    setTimeout(() => (t.style.display = "none"), 2500);
+  }
+
+  function renderStats() {
+    const counts = { "In Stock": 0, "Issued": 0, "Returned Vendor": 0, "Received Vendor": 0, "Damaged": 0 };
+    items.forEach((i) => { if (counts[i.status] !== undefined) counts[i.status]++; });
+    document.getElementById("countInStock").textContent = counts["In Stock"];
+    document.getElementById("countIssued").textContent = counts["Issued"];
+    document.getElementById("countReturned").textContent = counts["Returned Vendor"];
+    document.getElementById("countReceived").textContent = counts["Received Vendor"];
+    document.getElementById("countDamaged").textContent = counts["Damaged"];
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById("itemsBody");
+    tbody.innerHTML = items.map((item) => `
+      <tr>
+        <td>${item.name}</td>
+        <td>${item.assignedTo || "—"}</td>
+        <td><span class="badge ${STATUS_KEYS[item.status] || ""}">${item.status}</span></td>
+        <td>${item.updatedAt || "—"}</td>
+        <td><button class="btn btn-secondary" onclick="editItem('${item.id}')"><i class="ti ti-edit"></i></button></td>
+      </tr>
+    `).join("");
+  }
+
+  function render() {
+    renderStats();
+    renderTable();
+  }
+
+  async function fetchItems() {
+    try {
+      const res = await fetch(`${SCRIPT_URL}?action=list`);
+      items = await res.json();
+    } catch (e) {
+      console.warn("Could not reach Apps Script backend, using empty list:", e);
+      items = [];
+    }
+    render();
+  }
+
+  function openModal(item) {
+    document.getElementById("modalBackdrop").classList.add("open");
+    document.getElementById("modalTitle").textContent = item ? "Edit Item" : "Add Item";
+    document.getElementById("itemId").value = item ? item.id : "";
+    document.getElementById("itemName").value = item ? item.name : "";
+    document.getElementById("assignedTo").value = item ? (item.assignedTo || "") : "";
+    document.getElementById("itemStatus").value = item ? item.status : "In Stock";
+  }
+
+  function closeModal() {
+    document.getElementById("modalBackdrop").classList.remove("open");
+  }
+
+  window.editItem = function (id) {
+    const item = items.find((i) => i.id === id);
+    if (item) openModal(item);
+  };
+
+  document.getElementById("addBtn").addEventListener("click", () => openModal(null));
+  document.getElementById("cancelBtn").addEventListener("click", closeModal);
+
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    const payload = {
+      id: document.getElementById("itemId").value || undefined,
+      name: document.getElementById("itemName").value,
+      assignedTo: document.getElementById("assignedTo").value,
+      status: document.getElementById("itemStatus").value,
+    };
+    if (!payload.name) { showToast("Item name is required"); return; }
+
+    try {
+      await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: payload.id ? "update" : "add", item: payload }),
+      });
+      showToast(payload.id ? "Item updated" : "Item added");
+      closeModal();
+      fetchItems();
+    } catch (e) {
+      showToast("Failed to save -- check SCRIPT_URL is deployed correctly");
+    }
+  });
+
+  document.getElementById("syncBtn").addEventListener("click", fetchItems);
+
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    const form = document.getElementById("exportForm");
+    form.action = SCRIPT_URL;
+    form.submit();
+  });
+
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const body = document.body;
+    const isDark = body.getAttribute("data-theme") === "dark";
+    body.setAttribute("data-theme", isDark ? "light" : "dark");
+    document.getElementById("themeToggle").innerHTML = isDark
+      ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
+    localStorage.setItem("ims-theme", isDark ? "light" : "dark");
+  });
+
+  // restore saved theme preference
+  const savedTheme = localStorage.getItem("ims-theme");
+  if (savedTheme === "dark") {
+    document.body.setAttribute("data-theme", "dark");
+    document.getElementById("themeToggle").innerHTML = '<i class="ti ti-sun"></i>';
+  }
+
+  fetchItems();
+</script>
+</body>
+</html>
